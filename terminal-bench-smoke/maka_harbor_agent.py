@@ -44,7 +44,7 @@ def _load_env_file(path: Path) -> dict[str, str]:
 class MakaHarborAgent(BaseAgent):
     def __init__(self, *args: Any, extra_env: dict[str, str] | None = None, **kwargs: Any):
         super().__init__(*args, **kwargs)
-        self.extra_env = extra_env or {}
+        self._extra_env = extra_env or {}
 
     @staticmethod
     def name() -> str:
@@ -75,7 +75,7 @@ class MakaHarborAgent(BaseAgent):
 
         env = os.environ.copy()
         env.update(_load_env_file(DEFAULT_RUNNER_ENV))
-        env.update(self.extra_env)
+        env.update(self._extra_env)
         env["MAKA_HARBOR_BRIDGE_URL"] = f"http://{host}:{port}"
         env["MAKA_HARBOR_BRIDGE_TOKEN"] = bridge_token
         env.setdefault("MAKA_REPO_DIR", str(REPO_ROOT))
@@ -522,6 +522,14 @@ def _runner_env_summary(env: dict[str, str]) -> dict[str, str]:
         "MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS",
         "MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER",
         "MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MODE",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MIN_STEP_NUMBER",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_HIGH_WATER_RATIO",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MAX_ACTIVE_ESTIMATED_TOKENS",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MIN_RECENT_MESSAGES",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MAX_SUMMARY_ESTIMATED_TOKENS",
+        "MAKA_CONTEXT_ACTIVE_FULL_COMPACT_ARCHIVE_REQUIRED",
         "MAKA_CONTEXT_ARCHIVE_RETRIEVAL",
         "MAKA_HARBOR_AGENT_TIMEOUT_SEC",
         "MAKA_HARBOR_MAX_ATTEMPTS",

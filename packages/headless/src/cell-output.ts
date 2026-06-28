@@ -381,6 +381,9 @@ function validateContextBudgetPolicySnapshot(value: unknown): HarborCellContextB
     ...(value.activeToolResultPrune !== undefined
       ? { activeToolResultPrune: validateActiveToolResultPruneSnapshot(value.activeToolResultPrune) }
       : {}),
+    ...(value.activeFullCompact !== undefined
+      ? { activeFullCompact: validateActiveFullCompactSnapshot(value.activeFullCompact) }
+      : {}),
     ...(value.archiveRetrieval !== undefined
       ? { archiveRetrieval: validateArchiveRetrievalSnapshot(value.archiveRetrieval) }
       : {}),
@@ -403,6 +406,25 @@ function validateActiveToolResultPruneSnapshot(value: unknown): NonNullable<Cont
     enabled: requireBoolean(value.enabled, 'contextBudgetPolicy.activeToolResultPrune.enabled'),
     maxCurrentResultEstimatedTokens: requireNumber(value.maxCurrentResultEstimatedTokens, 'contextBudgetPolicy.activeToolResultPrune.maxCurrentResultEstimatedTokens'),
     minStepNumber: requireNumber(value.minStepNumber, 'contextBudgetPolicy.activeToolResultPrune.minStepNumber'),
+  };
+}
+
+function validateActiveFullCompactSnapshot(value: unknown): NonNullable<ContextBudgetPolicy['activeFullCompact']> {
+  if (!isRecord(value)) throw new Error('contextBudgetPolicy.activeFullCompact must be a JSON object');
+  return {
+    enabled: requireBoolean(value.enabled, 'contextBudgetPolicy.activeFullCompact.enabled'),
+    ...(value.mode !== undefined
+      ? { mode: requireStringUnion(value.mode, 'contextBudgetPolicy.activeFullCompact.mode', ['off', 'index_only', 'validate_only', 'prepare_step_dry_run'] as const) }
+      : {}),
+    minStepNumber: requireNumber(value.minStepNumber, 'contextBudgetPolicy.activeFullCompact.minStepNumber'),
+    highWaterRatio: requireNumber(value.highWaterRatio, 'contextBudgetPolicy.activeFullCompact.highWaterRatio'),
+    ...(value.maxActiveEstimatedTokens !== undefined
+      ? { maxActiveEstimatedTokens: requireNumber(value.maxActiveEstimatedTokens, 'contextBudgetPolicy.activeFullCompact.maxActiveEstimatedTokens') }
+      : {}),
+    minRecentMessages: requireNumber(value.minRecentMessages, 'contextBudgetPolicy.activeFullCompact.minRecentMessages'),
+    ...(value.maxSummaryEstimatedTokens !== undefined
+      ? { maxSummaryEstimatedTokens: requireNumber(value.maxSummaryEstimatedTokens, 'contextBudgetPolicy.activeFullCompact.maxSummaryEstimatedTokens') }
+      : {}),
   };
 }
 

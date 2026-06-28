@@ -192,6 +192,12 @@ describe('runHarborCell', () => {
         MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: 'on',
         MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS: '512',
         MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER: '1',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT: 'on',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MIN_STEP_NUMBER: '2',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_HIGH_WATER_RATIO: '0.5',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MAX_ACTIVE_ESTIMATED_TOKENS: '16384',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MIN_RECENT_MESSAGES: '4',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MAX_SUMMARY_ESTIMATED_TOKENS: '1024',
         MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
         MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE: 'eager',
       }, {
@@ -209,6 +215,14 @@ describe('runHarborCell', () => {
           enabled: true,
           maxCurrentResultEstimatedTokens: 512,
           minStepNumber: 1,
+        },
+        activeFullCompact: {
+          enabled: true,
+          minStepNumber: 2,
+          highWaterRatio: 0.5,
+          maxActiveEstimatedTokens: 16384,
+          minRecentMessages: 4,
+          maxSummaryEstimatedTokens: 1024,
         },
         archiveRetrieval: {
           enabled: true,
@@ -743,6 +757,17 @@ describe('runHarborCell', () => {
       () => buildHarborCellContextBudgetBackendOptions({ MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'onn' }),
       /MAKA_CONTEXT_ARCHIVE_RETRIEVAL must be a boolean/,
     );
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({ MAKA_CONTEXT_ACTIVE_FULL_COMPACT: 'onn' }),
+      /MAKA_CONTEXT_ACTIVE_FULL_COMPACT must be a boolean/,
+    );
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT: 'on',
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MODE: 'bad',
+      }),
+      /MAKA_CONTEXT_ACTIVE_FULL_COMPACT_MODE must be one of/,
+    );
   });
 
   test('Harbor context budget env treats explicit false-like booleans as disabled', () => {
@@ -758,6 +783,12 @@ describe('runHarborCell', () => {
       buildHarborCellContextBudgetBackendOptions({
         MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: 'enabled',
       }).contextBudget?.activeToolResultPrune,
+      { enabled: true },
+    );
+    assert.deepEqual(
+      buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_ACTIVE_FULL_COMPACT: 'enabled',
+      }).contextBudget?.activeFullCompact,
       { enabled: true },
     );
   });
