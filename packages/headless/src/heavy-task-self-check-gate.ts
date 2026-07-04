@@ -1,6 +1,10 @@
 import type { Task } from './contracts.js';
 import { evaluateHeavyTaskCompletionStatus } from './heavy-task-finalization.js';
-import { heavyTaskSelfCheckStrongPassBlocker, isAcceptedHeavyTaskSelfCheck } from './heavy-task-self-check.js';
+import {
+  heavyTaskSelfCheckAdvisoryFacts,
+  heavyTaskSelfCheckStrongPassBlocker,
+  isAcceptedHeavyTaskSelfCheck,
+} from './heavy-task-self-check.js';
 import type { HeavyTaskModeSelection } from './heavy-task-policy.js';
 import type {
   HeavyTaskAcceptanceCheck,
@@ -14,6 +18,7 @@ import type { TaskRunProjection } from './task-run-store.js';
 export type HeavyTaskSelfCheckGateDecision =
   | { action: 'allow_finalize'; reason: string; checklist: HeavyTaskAcceptanceCheck[]; selfCheckId: string }
   | { action: 'repair_prompt'; reason: string; checklist: HeavyTaskAcceptanceCheck[]; prompt: string; attempt: 1 }
+  | { action: 'advisory_prompt'; reason: string; checklist: HeavyTaskAcceptanceCheck[]; prompt: string; attempt: 1 }
   | { action: 'allow_official_verifier_after_bounded_attempt'; reason: string; checklist: HeavyTaskAcceptanceCheck[] };
 
 export interface HeavyTaskSelfCheckGateInput {
@@ -46,13 +51,18 @@ export function evaluateHeavyTaskSelfCheckGate(input: HeavyTaskSelfCheckGateInpu
     decisions: input.projection.decisions,
   });
   const selfCheck = input.projection.latestHeavyTaskSelfCheck;
-  const reason = gateBlockerReason(
+  const hardBlockerReason = gateBlockerReason(
     selfCheck,
     input.projection.latestHeavyTaskSelfCheckPlan,
     completion.semantic.reason,
     checklist,
   );
-  if (!reason && completion.semantic.status === 'complete' && selfCheck) {
+  const advisoryFacts = selfCheck
+    ? heavyTaskSelfCheckAdvisoryFacts(selfCheck, input.projection.latestHeavyTaskSelfCheckPlan)
+    : [];
+  const attemptsUsed = input.repairAttemptsUsed ?? 0;
+  const maxAttempts = input.maxRepairAttempts ?? 1;
+  if (!hardBlockerReason && completion.semantic.status === 'complete' && selfCheck && advisoryFacts.length === 0) {
     return {
       action: 'allow_finalize',
       reason: 'latest accepted public self-check is complete and evidence-bearing',
@@ -61,14 +71,34 @@ export function evaluateHeavyTaskSelfCheckGate(input: HeavyTaskSelfCheckGateInpu
     };
   }
 
-  const attemptsUsed = input.repairAttemptsUsed ?? 0;
-  const maxAttempts = input.maxRepairAttempts ?? 1;
-  const blockedReason = reason ?? completion.semantic.reason;
+  const advisoryReason = advisoryFacts.length > 0
+    ? `advisory workspace/self-check facts observed: ${advisoryFacts.map((fact) => cleanOneLine(fact, 500)).join(' | ')}`
+    : undefined;
+  const blockedReason = hardBlockerReason ?? (completion.semantic.status === 'complete' ? advisoryReason : completion.semantic.reason) ?? 'heavy-task self-check gate needs review';
   if (attemptsUsed >= maxAttempts) {
     return {
       action: 'allow_official_verifier_after_bounded_attempt',
       reason: blockedReason,
       checklist,
+    };
+  }
+
+  if (!hardBlockerReason && completion.semantic.status === 'complete' && advisoryFacts.length > 0) {
+    return {
+      action: 'advisory_prompt',
+      reason: blockedReason,
+      checklist,
+      prompt: renderHeavyTaskSelfCheckGatePrompt({
+        reason: blockedReason,
+        checklist,
+        selfCheck,
+        workspaceObservation: input.projection.latestHeavyTaskWorkspaceObservation,
+        attempt: attemptsUsed + 1,
+        maxAttempts,
+        mode: 'advisory',
+        advisoryFacts,
+      }),
+      attempt: 1,
     };
   }
 
@@ -83,6 +113,8 @@ export function evaluateHeavyTaskSelfCheckGate(input: HeavyTaskSelfCheckGateInpu
       workspaceObservation: input.projection.latestHeavyTaskWorkspaceObservation,
       attempt: attemptsUsed + 1,
       maxAttempts,
+      mode: 'repair',
+      advisoryFacts,
     }),
     attempt: 1,
   };
@@ -104,7 +136,7 @@ export function heavyTaskSelfCheckGateStateFromDecision(input: {
   if (input.decision.action === 'allow_finalize') {
     return { ...base, selfCheckId: input.decision.selfCheckId };
   }
-  if (input.decision.action === 'repair_prompt') {
+  if (input.decision.action === 'repair_prompt' || input.decision.action === 'advisory_prompt') {
     return { ...base, prompt: input.decision.prompt };
   }
   return base;
@@ -192,7 +224,37 @@ export function renderHeavyTaskSelfCheckGatePrompt(input: {
   workspaceObservation?: HeavyTaskWorkspaceObservationState;
   attempt: number;
   maxAttempts: number;
+  mode?: 'repair' | 'advisory';
+  advisoryFacts?: readonly string[];
 }): string {
+  const mode = input.mode ?? 'repair';
+  if (mode === 'advisory') {
+    const lines = [
+      'Additional workspace/self-check facts were observed before heavy-task finalization.',
+      'These facts are advisory observations, not a rejection and not a repair order.',
+      `Observation reason: ${input.reason}`,
+      `Bounded advisory/check attempt: ${input.attempt} of ${input.maxAttempts}.`,
+      '',
+      'Advisory facts:',
+      ...((input.advisoryFacts?.length ?? 0) > 0
+        ? input.advisoryFacts!.flatMap((fact) => fact.split('\n').map((line) => `- ${line}`))
+        : ['- none']),
+      '',
+      'Public acceptance checklist:',
+      ...input.checklist.map((check) => {
+        const target = check.path ? ` target=${check.path}` : '';
+        const command = check.commandHint ? ` command_hint=${check.commandHint}` : '';
+        return `- [${check.id}] ${check.kind}/${check.source}: ${check.description}; evidence=${check.evidenceRequired}${target}${command}`;
+      }),
+      '',
+      latestSelfCheckSummary(input.selfCheck),
+      ...latestWorkspaceObservationSummary(input.workspaceObservation),
+      '',
+      'Required action: compare these observed facts with the task instructions and your accepted plan. Repair only if they contradict the task; otherwise refresh self_check_submit with concrete public evidence or proceed consistently.',
+      'Constraints: do not inspect hidden, private, evaluator, official verifier, or scorer-only material. Keep scratch outputs under /tmp/maka-self-check/... when practical, and report any task-relevant workspace side effects as facts.',
+    ];
+    return lines.filter((line) => line !== undefined).join('\n');
+  }
   const lines = [
     'Your previous completion is not accepted for heavy-task finalization yet.',
     `Gate reason: ${input.reason}`,

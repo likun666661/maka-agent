@@ -84,11 +84,12 @@ describe('heavy-task finalization status', () => {
     }
   });
 
-  test('does not treat a pass self-check with uncleaned workspace delta as semantic complete', () => {
+  test('treats reported workspace side-effect paths as advisory semantic completion facts', () => {
     const status = evaluateHeavyTaskCompletionStatus({
       status: 'budget_exhausted',
       taxonomy: 'budget_exhausted',
       heavyTaskMode,
+      latestHeavyTaskSelfCheckPlan: selfCheckPlan(),
       latestHeavyTaskSelfCheck: selfCheck('pass', {
         executionHygiene: {
           sandbox: {
@@ -113,9 +114,8 @@ describe('heavy-task finalization status', () => {
       latestHeavyTaskTodos: phaseGateTodos([{ id: 'edit', status: 'completed' }]),
     });
 
-    assert.equal(status.semantic.status, 'incomplete');
-    assert.match(status.semantic.reason ?? '', /uncleaned workspace side effects/);
-    assert.equal(status.finalization.eligible, false);
+    assert.equal(status.semantic.status, 'complete');
+    assert.equal(status.finalization.eligible, true);
   });
 
   test('requires sandbox execution evidence for pass self-check semantic completion', () => {

@@ -484,6 +484,7 @@ export interface HeavyTaskAcceptanceCheck {
 export type HeavyTaskSelfCheckGateAction =
   | 'allow_finalize'
   | 'repair_prompt'
+  | 'advisory_prompt'
   | 'allow_official_verifier_after_bounded_attempt';
 
 export interface HeavyTaskSelfCheckGateState {

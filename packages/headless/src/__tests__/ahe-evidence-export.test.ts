@@ -236,8 +236,8 @@ describe('AHE evidence export', () => {
           ts: 3,
           gate: {
             schemaVersion: 1,
-            action: 'repair_prompt',
-            reason: 'latest self-check reports uncleaned workspace side effects',
+            action: 'advisory_prompt',
+            reason: 'advisory workspace/self-check facts observed: latest self-check reports workspace side effects: /app/polyglot/cmain',
             attempt: 1,
             maxAttempts: 1,
             checklist: [{
@@ -247,7 +247,7 @@ describe('AHE evidence export', () => {
               description: 'Pass self-check must include sandbox execution evidence and a public workspace hygiene guard',
               evidenceRequired: 'command_or_artifact',
             }],
-            prompt: 'run public checks and self_check_submit',
+            prompt: 'Additional workspace/self-check facts were observed before heavy-task finalization.',
           },
         },
         officialScoreEvent('run-official', false),
@@ -300,8 +300,8 @@ describe('AHE evidence export', () => {
       assert.equal(failureDigest.selfCheck.hygiene.sandboxStrategy, 'scratch_dir');
       assert.equal(failureDigest.selfCheck.hygiene.scratchUsed, false);
       assert.equal(failureDigest.selfCheck.hygiene.workspaceGuardStatus, 'dirty');
-      assert.equal(failureDigest.selfCheck.hygiene.strongPassEligible, false);
-      assert.match(failureDigest.selfCheck.hygiene.strongPassBlocker, /uncleaned workspace side effects/);
+      assert.equal(failureDigest.selfCheck.hygiene.strongPassEligible, true);
+      assert.equal(failureDigest.selfCheck.hygiene.strongPassBlocker, undefined);
       assert.equal(failureDigest.selfCheck.hygiene.workspacePollutionSuspected, true);
       assert.deepEqual(failureDigest.selfCheck.hygiene.remainingSideEffectPaths, ['/app/polyglot/cmain']);
       assert.deepEqual(failureDigest.selfCheck.hygiene.addedPaths, ['/app/polyglot/cmain']);
@@ -318,8 +318,8 @@ describe('AHE evidence export', () => {
       assert.equal(taskRunExport.progress.selfCheckPlans.latest.planId, 'plan-1');
       assert.equal(taskRunExport.progress.selfCheckPlans.audit.status, 'fail');
       assert.equal(taskRunExport.heavyTask.selfCheckPlan.audit.status, 'fail');
-      assert.equal(failureDigest.finalState.selfCheckGate.action, 'repair_prompt');
-      assert.match(failureDigest.finalState.selfCheckGate.reason, /uncleaned workspace side effects/);
+      assert.equal(failureDigest.finalState.selfCheckGate.action, 'advisory_prompt');
+      assert.match(failureDigest.finalState.selfCheckGate.reason, /workspace side effects/);
       assert.match(failureDigest.officialHarbor.verifier.stdoutExcerpt, /expected move e2e4/);
       assert.equal(failureDigest.debugRefs.messages.ref, 'traces/run-official/messages.json');
       const messages = JSON.parse(await readFile(join(out, 'traces', 'run-official', 'messages.json'), 'utf8'));

@@ -417,6 +417,32 @@ export function hasBlockingHeavyTaskSelfCheckWorkspaceDelta(
   return false;
 }
 
+export function heavyTaskSelfCheckAdvisoryFacts(
+  selfCheck: HeavyTaskSemanticSelfCheckState,
+  plan?: HeavyTaskSelfCheckPlanState,
+): string[] {
+  const facts: string[] = [];
+  const audit = auditSelfCheckPlanConsistency(plan, selfCheck);
+  if (isAdvisoryPlanAudit(audit)) {
+    facts.push(renderSelfCheckPlanAuditDiagnostic(audit));
+  }
+  const hygiene = selfCheck.executionHygiene;
+  const sideEffectPaths = hygiene?.remainingSideEffectPaths ?? [];
+  if (sideEffectPaths.length > 0) {
+    facts.push(`latest self-check reports remaining workspace side-effect paths: ${listForDiagnostic(sideEffectPaths.map(normalizePlanPath))}`);
+  }
+  if (hasAdvisoryWorkspaceSideEffects(selfCheck, plan)) {
+    const guard = hygiene?.workspaceGuard;
+    const observed = uniqueStrings([
+      ...(guard?.addedPaths ?? []),
+      ...(guard?.modifiedPaths ?? []),
+      ...(guard?.removedPaths ?? []),
+    ].map(normalizePlanPath));
+    facts.push(`latest self-check reports workspace side effects${observed.length > 0 ? `: ${listForDiagnostic(observed)}` : ''}`);
+  }
+  return uniqueStrings(facts);
+}
+
 export function heavyTaskSelfCheckSandboxStatus(
   selfCheck: HeavyTaskSemanticSelfCheckState,
 ): 'present' | 'missing' {
@@ -433,15 +459,9 @@ export function heavyTaskSelfCheckStrongPassBlocker(
   if (selfCheck.executionHygiene?.workspaceGuard?.checked !== true) {
     return 'latest self-check is missing public workspace hygiene guard evidence';
   }
-  if ((selfCheck.executionHygiene.remainingSideEffectPaths?.length ?? 0) > 0) {
-    return 'latest self-check reports uncleaned workspace side effects';
-  }
   const audit = auditSelfCheckPlanConsistency(plan, selfCheck);
-  if (audit.status === 'fail') {
+  if (audit.status === 'fail' && !isAdvisoryPlanAudit(audit)) {
     return renderSelfCheckPlanAuditDiagnostic(audit);
-  }
-  if (hasBlockingHeavyTaskSelfCheckWorkspaceDelta(selfCheck, plan)) {
-    return 'latest self-check reports uncleaned workspace side effects';
   }
   return undefined;
 }
@@ -508,6 +528,19 @@ function stringsFromSelfCheck(input: Pick<HeavyTaskSelfCheckSubmitInput, 'public
   }
   collectExecutionHygieneStrings(input.executionHygiene, strings);
   return strings.filter((value) => value.length > 0).map((value) => value.slice(0, MAX_GUARD_STRING_CHARS));
+}
+
+function isAdvisoryPlanAudit(audit: HeavyTaskSelfCheckPlanAuditSummary): boolean {
+  if (audit.status !== 'fail') return false;
+  return audit.riskFlags.length > 0
+    && audit.riskFlags.every((flag) => flag === 'unplanned_added_path' || flag === 'scratch_escape');
+}
+
+function hasAdvisoryWorkspaceSideEffects(
+  selfCheck: HeavyTaskSemanticSelfCheckState,
+  plan?: HeavyTaskSelfCheckPlanState,
+): boolean {
+  return hasBlockingHeavyTaskSelfCheckWorkspaceDelta(selfCheck, plan);
 }
 
 function stringsFromSelfCheckPlan(input: HeavyTaskSelfCheckPlanSubmitInput): string[] {

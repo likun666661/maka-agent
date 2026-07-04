@@ -473,8 +473,10 @@ class GateLaunderBackend implements AgentBackend {
     this.ctx.prompts.push(input.text);
     const ts = Date.now();
     const turnNumber = this.ctx.prompts.length;
+    const todoUpdate = this.ctx.tools.find((tool) => tool.name === 'todo_update');
     const selfCheckPlanSubmit = this.ctx.tools.find((tool) => tool.name === 'self_check_plan_submit');
     const selfCheckSubmit = this.ctx.tools.find((tool) => tool.name === 'self_check_submit');
+    assert.ok(todoUpdate);
     assert.ok(selfCheckPlanSubmit);
     assert.ok(selfCheckSubmit);
     const toolCtx = {
@@ -485,6 +487,26 @@ class GateLaunderBackend implements AgentBackend {
       abortSignal: new AbortController().signal,
       emitOutput: () => {},
     };
+    await todoUpdate.impl({
+      items: [
+        {
+          id: 'artifact',
+          kind: 'runnable_artifact',
+          content: 'Keep /app/polyglot/main.py.c as the runnable artifact',
+          status: 'completed',
+          priority: 'high',
+          evidence: 'python/gcc public checks passed.',
+        },
+        {
+          id: 'check',
+          kind: 'public_check',
+          content: 'Run public polyglot checks',
+          status: 'completed',
+          priority: 'high',
+          evidence: 'python/gcc public checks passed.',
+        },
+      ],
+    }, toolCtx);
     await selfCheckPlanSubmit.impl({
       finalArtifacts: [{
         path: '/app/polyglot/main.py.c',
@@ -862,7 +884,7 @@ describe('runTaskOnce', () => {
     });
   });
 
-  test('bounded repair records model-reported workspace side-effect diagnostic before official verifier', async () => {
+  test('bounded advisory records model-reported workspace side-effect facts before official verifier', async () => {
     await withDirs(async (fixtureDir, storageRoot) => {
       const prompts: string[] = [];
       const config: Config = {
@@ -899,6 +921,9 @@ describe('runTaskOnce', () => {
       assert.equal(result.projection.latestHeavyTaskSelfCheckGate?.action, 'allow_official_verifier_after_bounded_attempt');
       assert.match(result.projection.latestHeavyTaskSelfCheckGate?.reason ?? '', /\/app\/polyglot\/cmain/);
       assert.match(result.projection.latestHeavyTaskSelfCheckGate?.reason ?? '', /unplanned_added_path/);
+      const firstGate = result.projection.events.find((event) => event.type === 'heavy_task_self_check_gate_recorded');
+      assert.equal(firstGate?.type === 'heavy_task_self_check_gate_recorded' ? firstGate.gate.action : undefined, 'advisory_prompt');
+      assert.match(firstGate?.type === 'heavy_task_self_check_gate_recorded' ? firstGate.gate.prompt ?? '' : '', /advisory observations/);
       assert.equal(result.projection.latestVerifierResult?.passed, true);
       assert.equal(result.projection.latestScoreResult?.taxonomy, 'passed');
       assert.equal(result.resultRecord.status, 'completed');

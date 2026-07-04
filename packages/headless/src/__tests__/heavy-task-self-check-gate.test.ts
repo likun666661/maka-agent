@@ -150,7 +150,7 @@ describe('heavy-task self-check gate', () => {
     assert.equal(decision.action, 'allow_finalize');
   });
 
-  test('unplanned /app/polyglot/cmain yields scratch and unplanned risk diagnostics without repair instructions', () => {
+  test('unplanned /app/polyglot/cmain yields advisory diagnostics without repair instructions', () => {
     const selfCheckState = selfCheck('pass', {
       command: 'cc /app/polyglot/main.py.c -o /app/polyglot/cmain && test -f /app/move.txt',
       refs: ['/app/move.txt', '/app/report.jsonl'],
@@ -182,10 +182,12 @@ describe('heavy-task self-check gate', () => {
       projection: projection(selfCheckState, plan(['/app/move.txt', '/app/report.jsonl'])),
     });
 
-    assert.equal(decision.action, 'repair_prompt');
+    assert.equal(decision.action, 'advisory_prompt');
     assert.match(decision.reason, /unplanned_added_path/);
     assert.match(decision.reason, /scratch_escape/);
     assert.match(decision.reason, /\/app\/polyglot\/cmain/);
+    assert.match(decision.prompt, /advisory observations, not a rejection and not a repair order/);
+    assert.doesNotMatch(decision.prompt, /not accepted for heavy-task finalization/);
     assert.doesNotMatch(decision.reason, /fix|repair|rerun|submit a revised plan/i);
   });
 

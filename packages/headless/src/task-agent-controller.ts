@@ -395,12 +395,12 @@ export async function runTaskOnce(
         ts: now(),
         gate: heavyTaskSelfCheckGateStateFromDecision({
           decision: gateDecision,
-          attempt: gateDecision.action === 'repair_prompt' ? gateDecision.attempt : 0,
+          attempt: gateDecision.action === 'repair_prompt' || gateDecision.action === 'advisory_prompt' ? gateDecision.attempt : 0,
           maxAttempts: 1,
         }),
       });
 
-      if (gateDecision.action === 'repair_prompt') {
+      if (gateDecision.action === 'repair_prompt' || gateDecision.action === 'advisory_prompt') {
         const repairActive = createSingleRunActiveSession(backends, sessionStore, now, newId);
         const repairRun = new AgentRun({
           sessionId: header.id,
